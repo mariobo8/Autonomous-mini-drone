@@ -72,8 +72,9 @@ float sbusFrequency = 50.0;
 #endif
 
 // callback function that will be executed when data is received
-void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
+void OnDataRecv(const esp_now_recv_info* esp_now_info, const uint8_t* incomingData, int len) {
   // Serial.println((char*)incomingData);
+  const uint8_t* mac_addr = esp_now_info->src_addr;
   DeserializationError err = deserializeJson(json, (char *)incomingData);
 
   if (err) {
