@@ -21,7 +21,7 @@ class Cameras:
         f = open(filename)
         self.camera_params = json.load(f)
 
-        self.cameras = Camera(fps=90, resolution=Camera.RES_SMALL, gain=10, exposure=100)
+        self.cameras = Camera(fps=80, resolution=Camera.RES_SMALL, gain=10, exposure=100)
         self.num_cameras = len(self.cameras.exposure)
         print(self.num_cameras)
 
@@ -67,7 +67,7 @@ class Cameras:
 
     def _camera_read(self):
         frames, _ = self.cameras.read()
-
+        #frames = np.copy(original_frames)
         for i in range(0, self.num_cameras):
             frames[i] = np.rot90(frames[i], k=self.camera_params[i]["rotation"])
             frames[i] = make_square(frames[i])
@@ -137,7 +137,6 @@ class Cameras:
     def get_frames(self):
         frames = self._camera_read()
         #frames = [add_white_border(frame, 5) for frame in frames]
-
         return np.hstack(frames)
 
     def _find_dot(self, img):

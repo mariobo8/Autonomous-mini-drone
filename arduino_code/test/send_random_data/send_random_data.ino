@@ -3,7 +3,7 @@
 #include <WiFi.h>
 
 uint8_t broadcastAddresses[][6] = {
-  { 0x88, 0x13, 0xBF, 0x03, 0x91, 0x3C }
+  {0x88, 0x13, 0xBF, 0x03, 0x91, 0x3C}
 };
 
 esp_now_peer_info_t peerInfo;
@@ -16,20 +16,14 @@ struct RandomData {
   float z;
 };
 
+const int LED_PIN = 2;  // Built-in LED pin for most ESP32 boards
+
 // Global variable to track the last send status
 volatile bool lastSendSuccess = false;
 
 // Callback when data is sent
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-  lastSendSuccess = (status == ESP_NOW_SEND_SUCCESS);
-  Serial.print("Last Packet Send Status: ");
-  Serial.println(lastSendSuccess ? "Delivery Success" : "Delivery Fail");
-  
-  char macStr[18];
-  snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
-           mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
-  Serial.print("Sent to: ");
-  Serial.println(macStr);
+
 }
 
 void setup() {
@@ -75,7 +69,8 @@ void sendRandomData() {
   esp_err_t result = esp_now_send(broadcastAddresses[data.droneIndex], (uint8_t *)&data, sizeof(RandomData));
   
   if (result == ESP_OK) 
-    Serial.println("Data sent successfully. Waiting for callback...");
+    digitalWrite(LED_PIN, HIGH);
+    Serial.println("SEGNAME INVIATO CON SUCCESSO");
     
 }
 

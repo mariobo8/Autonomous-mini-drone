@@ -1,11 +1,14 @@
 import pygame
-import socket
 import sys
 import math
+import serial
+import time
 
-# ESP32 WiFi details
-ESP32_IP = "192.168.4.1"  # Default IP when ESP32 is in AP mode
-ESP32_PORT = 4210  # The port your ESP32 is listening on
+'''
+This code sends joystick commands to a Base Station esp32 through the usb port
+then the ESP32 will send data using WiFi ESP NOW
+'''
+ser = serial.Serial("/dev/ttyACM0", 1000000, write_timeout=1, )
 
 # Initialize Pygame
 pygame.init()
@@ -27,21 +30,34 @@ GRAY = (200, 200, 200)
 font = pygame.font.Font(None, 36)
 small_font = pygame.font.Font(None, 24)
 
-# UDP socket
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+# Arming Controls
 
-# Control variables
+armed = False
+
+# Body Controls
 throttle = 0
 pitch = 0
 roll = 0
 yaw = 0
 
+
 def send_command():
-    command = f"T:{throttle},P:{pitch},R:{roll},Y:{yaw}"
+    command = f"A:{int(armed)},T:{throttle},P:{pitch},R:{roll},Y:{yaw}"
     try:
-        sock.sendto(command.encode(), (ESP32_IP, ESP32_PORT))
-    except socket.error as e:
+        ser.write(command.encode('utf-8'))
+        time.sleep(0.1)
+        print(command.encode('utf-8'))
+    except serial.SerialException as e:
         print(f"Error sending data: {e}")
+
+
+def draw_arm_button():
+    button_color = GREEN if armed else RED
+    pygame.draw.rect(screen, button_color, (600, 50, 150, 50))
+    text = font.render("ARMED" if armed else "DISARMED", True, BLACK)
+    text_rect = text.get_rect(center=(675, 75))
+    screen.blit(text, text_rect)
+
 
 def draw_interface():
     screen.fill(WHITE)
@@ -86,16 +102,9 @@ def draw_interface():
         text = small_font.render(instruction, True, BLACK)
         screen.blit(text, (550, 450 + i * 25))
 
+    draw_arm_button()
     pygame.display.flip()
 
-def emergency_stop():
-    global throttle, pitch, roll, yaw
-    throttle = 0
-    pitch = 0
-    roll = 0
-    yaw = 0
-    send_command()
-    print("EMERGENCY STOP ACTIVATED")
 
 running = True
 clock = pygame.time.Clock()
@@ -107,37 +116,46 @@ while running:
     
     keys = pygame.key.get_pressed()
     
-    # Throttle control (now with arrow keys)
+    # Arm The Drone
+    if keys[pygame.K_SPACE]:
+        if not space_pressed:
+            armed = not armed
+            throttle = 0
+            yaw = 0
+            print("Drone armed" if armed else "Drone disarmed")
+        space_pressed = True
+    else:
+        space_pressed = False
+
+    # Throttle control (now with arrow keys) 
     if keys[pygame.K_UP]:
-        throttle = min(throttle + 1, 100)
+        throttle = min(throttle + 5, 98)
     if keys[pygame.K_DOWN]:
-        throttle = max(throttle - 1, 0)
+        throttle = max(throttle - 5, 0)
     
     # Yaw control (now with arrow keys)
     if keys[pygame.K_RIGHT]:
-        yaw = min(yaw + 1, 100)
-    if keys[pygame.K_LEFT]:
-        yaw = max(yaw - 1, -100)
+        yaw = min(yaw + 5, 100)
+    elif keys[pygame.K_LEFT]:
+        yaw = max(yaw - 5, -100)
+    else:
+        yaw = int(yaw * 0)  # Gradually return to zero
     
     # Pitch control (now with W/S, auto-center)
     if keys[pygame.K_w]:
-        pitch = min(pitch + 2, 100)
+        pitch = min(pitch + 5, 100)
     elif keys[pygame.K_s]:
-        pitch = max(pitch - 2, -100)
+        pitch = max(pitch - 5, -100)
     else:
-        pitch = int(pitch * 0.8)  # Gradually return to zero
+        pitch = int(pitch * 0)  # Gradually return to zero
     
     # Roll control (now with A/D, auto-center)
     if keys[pygame.K_d]:
-        roll = min(roll + 2, 100)
+        roll = min(roll + 5, 100)
     elif keys[pygame.K_a]:
-        roll = max(roll - 2, -100)
+        roll = max(roll - 5, -100)
     else:
-        roll = int(roll * 0.8)  # Gradually return to zero
-    
-    # Emergency stop
-    if keys[pygame.K_SPACE]:
-        emergency_stop()
+        roll = int(roll * 0)  # Gradually return to zero
     
     # Quit
     if keys[pygame.K_q]:
@@ -148,5 +166,4 @@ while running:
     clock.tick(30)  # 30 FPS
 
 pygame.quit()
-sock.close()
 sys.exit()

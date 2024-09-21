@@ -71,7 +71,7 @@ char buffer[1024];
 void loop() {
   int availableBytes = Serial.available();
   if (availableBytes) {
-    int droneIndex = Serial.read() - '0';
+   z
     Serial.readBytes(buffer, availableBytes-1);
     buffer[availableBytes-1] = '\0';
     Serial.printf("\n drone index %d: ", droneIndex);

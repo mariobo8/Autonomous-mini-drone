@@ -10,7 +10,6 @@ from scipy import linalg
 from flask_socketio import SocketIO
 import copy
 import time
-import serial
 import threading
 from ruckig import InputParameter, OutputParameter, Result, Ruckig
 from flask_cors import CORS
@@ -18,7 +17,13 @@ import json
 
 serialLock = threading.Lock()
 
-ser = serial.Serial("/dev/cu.usbserial-02X2K2GE", 1000000, write_timeout=1, )
+# Try to initialize serial communication, but continue if not available
+try:
+    import serial
+    ser = serial.Serial("/dev/ttyACM0", 1000000, write_timeout=1)
+except:
+    ser = None
+    print("Serial port not available. Continuing without serial communication.")
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
@@ -26,18 +31,19 @@ socketio = SocketIO(app, cors_allowed_origins='*')
 
 cameras_init = False
 
-num_objects = 2
+num_objects = 1
 
 @app.route("/api/camera-stream")
 def camera_stream():
     cameras = Cameras.instance()
     cameras.set_socketio(socketio)
-    cameras.set_ser(ser)
-    cameras.set_serialLock(serialLock)
+    if ser:
+        cameras.set_ser(ser)
+        cameras.set_serialLock(serialLock)
     cameras.set_num_objects(num_objects)
     
     def gen(cameras):
-        frequency = 150
+        frequency = 90
         loop_interval = 1.0 / frequency
         last_run_time = 0
         i = 0
@@ -59,6 +65,7 @@ def camera_stream():
                 b'Content-Type: image/jpeg\r\n\r\n' + jpeg_frame + b'\r\n')
 
     return Response(gen(cameras), mimetype='multipart/x-mixed-replace; boundary=frame')
+
 
 @app.route("/api/trajectory-planning", methods=["POST"])
 def trajectory_planning_api():
@@ -118,41 +125,45 @@ def arm_drone(data):
         return
     
     Cameras.instance().drone_armed = data["droneArmed"]
-    for droneIndex in range(0, num_objects):
-        serial_data = {
-            "armed": data["droneArmed"][droneIndex],
-        }
-        with serialLock:
-            ser.write(f"{str(droneIndex)}{json.dumps(serial_data)}".encode('utf-8'))
-        
-        time.sleep(0.01)
+    if ser:
+        for droneIndex in range(0, num_objects):
+            serial_data = {
+                "armed": data["droneArmed"][droneIndex],
+            }
+            with serialLock:
+                ser.write(f"{str(droneIndex)}{json.dumps(serial_data)}".encode('utf-8'))
+
+            time.sleep(0.01)
 
 @socketio.on("set-drone-pid")
-def arm_drone(data):
-    serial_data = {
-        "pid": [float(x) for x in data["dronePID"]],
-    }
-    with serialLock:
-        ser.write(f"{str(data['droneIndex'])}{json.dumps(serial_data)}".encode('utf-8'))
-        time.sleep(0.01)
+def set_drone_pid(data):
+    if ser:
+        serial_data = {
+            "pid": [float(x) for x in data["dronePID"]],
+        }
+        with serialLock:
+            ser.write(f"{str(data['droneIndex'])}{json.dumps(serial_data)}".encode('utf-8'))
+            time.sleep(0.01)
 
 @socketio.on("set-drone-setpoint")
-def arm_drone(data):
-    serial_data = {
-        "setpoint": [float(x) for x in data["droneSetpoint"]],
-    }
-    with serialLock:
-        ser.write(f"{str(data['droneIndex'])}{json.dumps(serial_data)}".encode('utf-8'))
-        time.sleep(0.01)
+def set_drone_setpoint(data):
+    if ser:
+        serial_data = {
+            "setpoint": [float(x) for x in data["droneSetpoint"]],
+        }
+        with serialLock:
+            ser.write(f"{str(data['droneIndex'])}{json.dumps(serial_data)}".encode('utf-8'))
+            time.sleep(0.01)
 
 @socketio.on("set-drone-trim")
-def arm_drone(data):
-    serial_data = {
-        "trim": [int(x) for x in data["droneTrim"]],
-    }
-    with serialLock:
-        ser.write(f"{str(data['droneIndex'])}{json.dumps(serial_data)}".encode('utf-8'))
-        time.sleep(0.01)
+def set_drone_trim(data):
+    if ser:
+        serial_data = {
+            "trim": [int(x) for x in data["droneTrim"]],
+        }
+        with serialLock:
+            ser.write(f"{str(data['droneIndex'])}{json.dumps(serial_data)}".encode('utf-8'))
+            time.sleep(0.01)
 
 
 @socketio.on("acquire-floor")
@@ -250,7 +261,7 @@ def calculate_camera_pose(data):
         R = None
         t = None
         max_points_infront_of_camera = 0
-        for i in range(0, 4):
+        for i in range(0, cameras.n_cameras):
             object_points = triangulate_points(np.hstack([np.expand_dims(camera1_image_points, axis=1), np.expand_dims(camera2_image_points, axis=1)]), np.concatenate([[camera_poses[-1]], [{"R": possible_Rs[i], "t": possible_ts[i]}]]))
             object_points_camera_coordinate_frame = np.array([possible_Rs[i].T @ object_point for object_point in object_points])
 
